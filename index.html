@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PDAM Survey Frontend</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header>
+        <h1>PDAM Survey App</h1>
+        <p class="subtitle">Frontend penghubung ke backend survey</p>
+      </header>
+
+      <section class="card">
+        <h2>1) Konfigurasi API</h2>
+        <div class="grid-2">
+          <label>
+            Base URL API
+            <input id="apiBaseUrl" type="text" placeholder="http://localhost:3000" />
+          </label>
+          <div class="actions align-end">
+            <button id="saveConfigBtn" type="button">Simpan Konfigurasi</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>2) Login</h2>
+        <form id="loginForm" class="grid-2">
+          <label>
+            Username
+            <input id="username" required />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" required />
+          </label>
+          <div class="actions">
+            <button type="submit">Login</button>
+            <button id="logoutBtn" type="button" class="secondary">Logout</button>
+          </div>
+        </form>
+        <pre id="loginOutput" class="output"></pre>
+      </section>
+
+      <section class="card">
+        <h2>3) Material Items</h2>
+        <div class="actions">
+          <button id="loadItemsBtn" type="button">Muat Semua Item</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Pilih</th>
+                <th>Nama</th>
+                <th>Satuan</th>
+                <th>Harga</th>
+                <th>ID</th>
+              </tr>
+            </thead>
+            <tbody id="itemsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>4) Buat Survey Entry</h2>
+        <form id="surveyForm" class="grid-2">
+          <label>
+            Judul Survey
+            <input id="surveyTitle" required />
+          </label>
+          <label>
+            Deskripsi
+            <input id="surveyDescription" />
+          </label>
+          <div class="actions">
+            <button type="submit">Simpan Survey</button>
+          </div>
+        </form>
+        <small>Pilih material di tabel Items, lalu klik Simpan Survey.</small>
+        <pre id="surveyOutput" class="output"></pre>
+      </section>
+
+      <section class="card">
+        <h2>5) Hasil Survey</h2>
+        <div class="actions">
+          <button id="loadResultsBtn" type="button">Muat Hasil Survey</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Judul</th>
+                <th>Deskripsi</th>
+                <th>Dibuat</th>
+                <th>Receipt PDF</th>
+              </tr>
+            </thead>
+            <tbody id="resultsTableBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>6) Upload Dokumen</h2>
+        <form id="uploadForm" class="grid-2">
+          <label>
+            Pilih File
+            <input id="documentFile" type="file" required />
+          </label>
+          <div class="actions align-end">
+            <button type="submit">Upload</button>
+          </div>
+        </form>
+        <pre id="uploadOutput" class="output"></pre>
+      </section>
+
+      <p id="status" class="status"></p>
+    </main>
+
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

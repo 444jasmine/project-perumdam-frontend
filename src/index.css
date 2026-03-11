@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+/* Base variables / colors according to Perumdam Brand based on Figma */
+@theme {
+  --color-primary: #0088CC;
+  --color-primary-dark: #006699;
+  --color-secondary: #00B4D8;
+  --color-background-light: #F8FBFF;
+
+  /* Additional colors config based on UI */
+  --color-success: #b2dfdb;
+  /* Selesai label */
+  --color-success-text: #00695c;
+  --color-warning: #ffecb3;
+  /* Draft label */
+  --color-warning-text: #ff8f00;
+  --color-gray-dark: #4F4F4F;
+  --color-gray-light: #F2F2F2;
+}
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  background-color: var(--color-background-light);
+  color: #333;
+}
+
+/* Custom utility for the card gradient on Home screen */
+.bg-gradient-primary {
+  background: linear-gradient(180deg, #A8E6FF 0%, #0088CC 100%);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

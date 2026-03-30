@@ -2,16 +2,16 @@ import React from 'react';
 import { ChevronLeft, Search, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
+import { DEFAULT_PELANGGAN } from './surveyData';
+import { getStoredStatusByCustomerId } from './surveyStorage';
 
 const EntriSurvey = () => {
     const navigate = useNavigate();
 
-    const dataPelanggan = [
-        { id: 1, name: 'RIZKY PRASETYA', rab: '1234567', alamat: 'Alamat Pelanggan', status: 'Belum disurvei' },
-        { id: 2, name: 'AYUNDA SHERLY', rab: '1234567', alamat: 'Alamat Pelanggan', status: 'Draft' },
-        { id: 3, name: 'KHAYANA WIJAYA', rab: '1234567', alamat: 'Alamat Pelanggan', status: 'Selesai' },
-        { id: 4, name: 'FARIDA YENI ASIH', rab: '1234567', alamat: 'Alamat Pelanggan', status: 'Selesai' },
-    ];
+    const dataPelanggan = DEFAULT_PELANGGAN.map((item) => ({
+        ...item,
+        status: getStoredStatusByCustomerId(item.id) || item.status,
+    }));
 
     const getStatusStyle = (status) => {
         switch (status) {

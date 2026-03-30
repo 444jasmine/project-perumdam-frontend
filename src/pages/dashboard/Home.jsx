@@ -70,7 +70,7 @@ const Home = () => {
             <div className="px-[18px] flex flex-col gap-[20px] mb-[45px]">
                 {/* Entri Survey Button */}
                 <button
-                    onClick={() => navigate('/entri-survey')}
+                    onClick={() => navigate('/list-surveyor')}
                     className="relative w-full h-[91px] rounded-[10px] flex items-center px-[22px] transition-transform active:scale-[0.98] outline-none group animate-[fadeIn_0.5s_ease-out_0.1s_both]"
                     style={{
                         background: 'linear-gradient(180deg, rgba(53, 194, 255, 0.75) 0%, rgba(202, 219, 227, 0.75) 100%)',

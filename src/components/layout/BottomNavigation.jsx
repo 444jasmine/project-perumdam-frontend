@@ -7,14 +7,31 @@ const BottomNavigation = () => {
 
     const navItems = [
         { path: '/home', icon: HomeIcon, id: 'home' },
-        { path: '/entri-survey', icon: Layers, id: 'survey-list' },
+        { path: '/list-surveyor', icon: Layers, id: 'survey-list' },
         { path: '/profile', icon: User, id: 'profile' },
     ];
+
+    const isItemActive = (path) => {
+        if (path === '/list-surveyor') {
+            return (
+                location.pathname === '/list-surveyor' ||
+                location.pathname === '/hasil-survey' ||
+                location.pathname === '/entri-survey' ||
+                location.pathname.startsWith('/survey/')
+            );
+        }
+
+        if (path === '/profile') {
+            return location.pathname === '/profile' || location.pathname.startsWith('/profile/');
+        }
+
+        return location.pathname === path;
+    };
 
     return (
         <div className="fixed bottom-0 w-full max-w-[420px] h-[61px] bg-[#068EC9] flex justify-between items-center px-[52px] z-50">
             {navItems.map((item) => {
-                const isActive = location.pathname === item.path;
+                const isActive = isItemActive(item.path);
                 const Icon = item.icon;
 
                 return (

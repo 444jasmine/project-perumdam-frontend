@@ -1,22 +1,72 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { ChevronLeft, PlusSquare, ChevronDown } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
+import { getPelangganById } from './surveyData';
+import {
+    getCustomerFormByCustomerId,
+    getStoredStatusByCustomerId,
+    saveCustomerFormByCustomerId,
+    setStoredStatusByCustomerId,
+} from './surveyStorage';
+
+const STATUS_OPTIONS = ['Belum Survey', 'Draft', 'Selesai'];
+const SURVEYOR_OPTIONS = ['Nida', 'Fatih', 'Bintang'];
 
 const InformasiPelanggan = () => {
     const navigate = useNavigate();
     const { id } = useParams();
 
     // Mock data based on ID - in a real app, you'd fetch this using the ID
-    const customer = {
-        name: 'RIZKY PRASETYA',
-        status: 'Belum Survey',
-        rab: '123456789',
-        alamat: '',
-        email: '',
-        telepon: '',
-        statusSurvey: '',
-        surveyor: ''
+    const customer = getPelangganById(id) || {
+        id,
+        name: 'Pelanggan',
+        rab: '-',
+        alamat: 'Alamat Pelanggan',
+        status: 'Belum disurvei'
+    };
+
+    const savedForm = getCustomerFormByCustomerId(id);
+    const initialStatus = getStoredStatusByCustomerId(id) || customer.status || 'Belum disurvei';
+
+    const [form, setForm] = useState(() => ({
+        rab: savedForm?.rab || customer.rab || '',
+        alamat: savedForm?.alamat || customer.alamat || '',
+        email: savedForm?.email || '',
+        telepon: savedForm?.telepon || '',
+        statusSurvey: savedForm?.statusSurvey || (initialStatus === 'Belum disurvei' ? 'Belum Survey' : initialStatus),
+        surveyor: savedForm?.surveyor || 'Nida',
+    }));
+
+    const normalizedStatusLabel = useMemo(() => {
+        return form.statusSurvey === 'Belum Survey' ? 'Belum disurvei' : form.statusSurvey;
+    }, [form.statusSurvey]);
+
+    const isDraft = form.statusSurvey === 'Draft';
+    const buttonText = isDraft ? 'Lanjutkan Survey' : 'Mulai Survei';
+
+    const handleChange = (event) => {
+        const { name, value } = event.target;
+
+        if (name === 'telepon') {
+            const numericValue = value.replace(/\D/g, '').slice(0, 12);
+            setForm((current) => ({
+                ...current,
+                telepon: numericValue,
+            }));
+            return;
+        }
+
+        setForm((current) => ({
+            ...current,
+            [name]: value,
+        }));
+    };
+
+    const handleContinue = () => {
+        saveCustomerFormByCustomerId(id, form);
+        setStoredStatusByCustomerId(id, normalizedStatusLabel);
+        navigate(`/survey/${id}/mulai`);
     };
 
     return (
@@ -60,7 +110,7 @@ const InformasiPelanggan = () => {
                 </button>
                 <div className="absolute inset-0 flex justify-center items-center pointer-events-none pt-[15px] pb-[25px]">
                     <h1 className="text-[#000000] font-bold text-[20px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                        Informasi Pelanggan
+                        Data Pelanggan
                     </h1>
                 </div>
             </div>
@@ -81,7 +131,7 @@ const InformasiPelanggan = () => {
                         </h2>
                         <div className="w-[133px] h-[21px] bg-[#CADBE3] rounded-[20px] flex items-center justify-center">
                             <span className="text-[#000000] font-bold text-[12px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                                {customer.status}
+                                {normalizedStatusLabel}
                             </span>
                         </div>
                     </div>
@@ -99,7 +149,9 @@ const InformasiPelanggan = () => {
                         </label>
                         <input
                             type="text"
-                            defaultValue={customer.rab}
+                            name="rab"
+                            value={form.rab}
+                            onChange={handleChange}
                             className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
                         />
                     </div>
@@ -111,6 +163,9 @@ const InformasiPelanggan = () => {
                         </label>
                         <input
                             type="text"
+                            name="alamat"
+                            value={form.alamat}
+                            onChange={handleChange}
                             className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
                         />
                     </div>
@@ -122,6 +177,9 @@ const InformasiPelanggan = () => {
                         </label>
                         <input
                             type="email"
+                            name="email"
+                            value={form.email}
+                            onChange={handleChange}
                             className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
                         />
                     </div>
@@ -133,8 +191,17 @@ const InformasiPelanggan = () => {
                         </label>
                         <input
                             type="tel"
+                            name="telepon"
+                            value={form.telepon}
+                            onChange={handleChange}
+                            inputMode="numeric"
+                            maxLength={12}
+                            pattern="[0-9]{0,12}"
                             className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
                         />
+                        <small className="text-[#4B5563] text-[11px]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                            Maksimal 12 digit angka.
+                        </small>
                     </div>
 
                     {/* Status Survey (Dropdown) */}
@@ -143,11 +210,15 @@ const InformasiPelanggan = () => {
                             Status Survey
                         </label>
                         <div className="relative w-[306px]">
-                            <select className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]">
-                                <option value=""></option>
-                                <option value="Belum Survey">Belum Survey</option>
-                                <option value="Draft">Draft</option>
-                                <option value="Selesai">Selesai</option>
+                            <select
+                                name="statusSurvey"
+                                value={form.statusSurvey}
+                                onChange={handleChange}
+                                className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]"
+                            >
+                                {STATUS_OPTIONS.map((status) => (
+                                    <option key={status} value={status}>{status}</option>
+                                ))}
                             </select>
                             <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-[#015E9C]">
                                 <ChevronDown size={18} strokeWidth={1.5} />
@@ -161,10 +232,15 @@ const InformasiPelanggan = () => {
                             Surveyor
                         </label>
                         <div className="relative w-[306px]">
-                            <select className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]">
-                                <option value=""></option>
-                                <option value="Nida">Nida</option>
-                                <option value="Other">Other</option>
+                            <select
+                                name="surveyor"
+                                value={form.surveyor}
+                                onChange={handleChange}
+                                className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]"
+                            >
+                                {SURVEYOR_OPTIONS.map((surveyor) => (
+                                    <option key={surveyor} value={surveyor}>{surveyor}</option>
+                                ))}
                             </select>
                             <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-[#015E9C]">
                                 <ChevronDown size={18} strokeWidth={1.5} />
@@ -175,6 +251,8 @@ const InformasiPelanggan = () => {
 
                 {/* Primary Action Button */}
                 <button
+                    type="button"
+                    onClick={handleContinue}
                     className="relative w-[318px] h-[43px] rounded-[10px] flex items-center justify-center transition-transform active:scale-[0.98] outline-none gap-2 animate-[fadeIn_0.5s_ease-out_0.2s_both]"
                     style={{
                         background: 'rgba(53, 194, 255, 0.75)',
@@ -183,7 +261,7 @@ const InformasiPelanggan = () => {
                 >
                     <PlusSquare size={20} className="text-[#1E1E1E]" strokeWidth={2} />
                     <span className="text-[#000000] font-bold text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                        Mulai Survei
+                        {buttonText}
                     </span>
                 </button>
             </div>

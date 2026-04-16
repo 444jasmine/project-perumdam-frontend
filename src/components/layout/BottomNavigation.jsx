@@ -29,18 +29,22 @@ const BottomNavigation = () => {
     };
 
     return (
-        <div className="fixed bottom-0 w-full max-w-[420px] h-[61px] bg-[#068EC9] flex justify-between items-center px-[52px] z-50">
+        <div className="fixed left-1/2 -translate-x-1/2 bottom-3 w-[calc(100%-24px)] max-w-[396px] h-[68px] bg-white/92 backdrop-blur-md border border-[#CFE3EF] rounded-[24px] shadow-[0_16px_30px_rgba(1,94,156,0.16)] flex justify-between items-center px-8 z-50">
             {navItems.map((item) => {
                 const isActive = isItemActive(item.path);
                 const Icon = item.icon;
 
                 return (
-                    <Link to={item.path} key={item.id} className="relative flex items-center justify-center h-full pt-1">
+                    <Link
+                        to={item.path}
+                        key={item.id}
+                        className={`w-[48px] h-[48px] rounded-full grid place-items-center transition-all ${isActive ? 'bg-[#0a7db7] text-white shadow-[0_12px_20px_rgba(10,125,183,0.22)]' : 'text-[#6d879b]'}`}
+                    >
                         <Icon
-                            size={isActive ? 32 : 30}
-                            color="white"
+                            size={isActive ? 28 : 24}
+                            color="currentColor"
                             strokeWidth={isActive ? 2.5 : 2}
-                            className={isActive ? "opacity-100" : "opacity-80"}
+                            className={isActive ? 'opacity-100' : 'opacity-85'}
                         />
                     </Link>
                 );

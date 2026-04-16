@@ -2,45 +2,38 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, Download, FileText } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
-import { getReceiptUrl, getSurveyResults } from '../../api';
+import { getReceiptPdfBlob, getSurveyResultById } from '../../api';
 import { getPelangganById } from './surveyData';
-import { getSurveyResultIdByCustomerId } from './surveyStorage';
 
 const PreviewNotaSurvey = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const pelanggan = getPelangganById(id);
+  const surveyResultId = decodeURIComponent(String(id || '')).trim();
+  const [surveyDetail, setSurveyDetail] = useState(null);
+  const pelanggan = surveyDetail
+    ? {
+        name: surveyDetail?.vcNama || surveyDetail?.title || 'Pelanggan',
+        rab: surveyDetail?.customerId || surveyDetail?._id || '-',
+        alamat: surveyDetail?.vcAlmt1 || surveyDetail?.description || '-'
+      }
+    : getPelangganById(surveyResultId);
 
-  const [surveyResultId, setSurveyResultId] = useState(getSurveyResultIdByCustomerId(id));
+  const [pdfBlobUrl, setPdfBlobUrl] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const findSurveyResultId = async () => {
-      if (surveyResultId) {
+    const loadSurveyDetail = async () => {
+      if (!surveyResultId) {
+        setError('ID hasil survey tidak valid.');
         return;
       }
 
       try {
         setLoading(true);
         setError('');
-
-        const results = await getSurveyResults();
-        const list = Array.isArray(results) ? results : [];
-        const byTitle = list.find((item) => {
-          const title = String(item?.title || '').toLowerCase();
-          const name = String(pelanggan?.name || '').toLowerCase();
-          return name && title.includes(name);
-        });
-
-        const fallbackLatest = list.length > 0 ? list[list.length - 1] : null;
-        const found = byTitle || fallbackLatest;
-
-        if (found?._id) {
-          setSurveyResultId(String(found._id));
-        } else {
-          setError('Data hasil survey tidak ditemukan untuk pelanggan ini.');
-        }
+        const detail = await getSurveyResultById(surveyResultId);
+        setSurveyDetail(detail || null);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Gagal mengambil data hasil survey';
         setError(message);
@@ -49,15 +42,50 @@ const PreviewNotaSurvey = () => {
       }
     };
 
-    findSurveyResultId();
-  }, [surveyResultId, pelanggan]);
+    loadSurveyDetail();
+  }, [surveyResultId]);
 
-  const pdfUrl = useMemo(() => {
-    if (!surveyResultId) {
-      return '';
-    }
+  useEffect(() => {
+    let mounted = true;
+    let objectUrl = '';
 
-    return getReceiptUrl(surveyResultId);
+    const loadPdfPreview = async () => {
+      if (!surveyResultId) {
+        setPdfBlobUrl('');
+        return;
+      }
+
+      try {
+        setLoading(true);
+        setError('');
+
+        const pdfBlob = await getReceiptPdfBlob(surveyResultId);
+        objectUrl = URL.createObjectURL(pdfBlob);
+
+        if (mounted) {
+          setPdfBlobUrl(objectUrl);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Gagal memuat file PDF';
+        if (mounted) {
+          setPdfBlobUrl('');
+          setError(message);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadPdfPreview();
+
+    return () => {
+      mounted = false;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
   }, [surveyResultId]);
 
   return (
@@ -98,15 +126,15 @@ const PreviewNotaSurvey = () => {
             </p>
           )}
 
-          {!loading && !error && pdfUrl && (
+          {!loading && !error && pdfBlobUrl && (
             <iframe
               title="Preview PDF Nota Survey"
-              src={pdfUrl}
+              src={pdfBlobUrl}
               className="w-full h-full bg-white rounded-[4px]"
             />
           )}
 
-          {!loading && !error && !pdfUrl && (
+          {!loading && !error && !pdfBlobUrl && (
             <div className="text-center text-[#003654]">
               <FileText size={28} className="mx-auto mb-2" />
               <p className="text-[12px] font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
@@ -117,11 +145,9 @@ const PreviewNotaSurvey = () => {
         </div>
 
         <a
-          href={pdfUrl || '#'}
-          download={pdfUrl ? `nota-survey-${id}.pdf` : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`h-[36px] rounded-[8px] flex items-center justify-center gap-2 font-bold text-[14px] ${pdfUrl ? 'bg-[#75C8EA] text-[#003654]' : 'bg-gray-300 text-gray-600 pointer-events-none'}`}
+          href={pdfBlobUrl || '#'}
+          download={pdfBlobUrl ? `nota-survey-${id}.pdf` : undefined}
+          className={`h-[36px] rounded-[8px] flex items-center justify-center gap-2 font-bold text-[14px] ${pdfBlobUrl ? 'bg-[#75C8EA] text-[#003654]' : 'bg-gray-300 text-gray-600 pointer-events-none'}`}
           style={{ fontFamily: 'Inter, sans-serif' }}
         >
           <Download size={16} />

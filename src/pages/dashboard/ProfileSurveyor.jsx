@@ -1,28 +1,25 @@
 import React from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronRight, LogOut } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
-import { getSurveyorProfiles } from './profileStorage';
+import { getCurrentSurveyorProfile } from './profileStorage';
+import { logout } from '../../auth';
 
 const ProfileSurveyor = () => {
     const navigate = useNavigate();
-    const profiles = getSurveyorProfiles();
+    const currentProfile = getCurrentSurveyorProfile();
+
+    const handleLogout = () => {
+        logout();
+        navigate('/login', { replace: true });
+    };
 
     return (
         <div className="min-h-screen bg-[#F8FBFF] flex flex-col relative w-full h-full pb-[88px]">
-            <div className="flex items-center px-[18px] pt-[16px] pb-[18px] relative">
-                <button
-                    onClick={() => navigate(-1)}
-                    className="p-1 z-10 text-[#1E1E1E] hover:bg-gray-100 rounded-full transition-colors active:scale-95"
-                    aria-label="Kembali"
-                >
-                    <ChevronLeft size={26} strokeWidth={2.8} />
-                </button>
-                <div className="absolute inset-0 flex justify-center items-center pointer-events-none">
-                    <h1 className="text-[#000000] font-bold text-[22px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                        Profile
-                    </h1>
-                </div>
+            <div className="flex items-center justify-center px-[18px] pt-[16px] pb-[18px]">
+                <h1 className="text-[#000000] font-bold text-[22px]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                    Profile
+                </h1>
             </div>
 
             <div className="px-[12px] flex-1 flex flex-col">
@@ -31,29 +28,46 @@ const ProfileSurveyor = () => {
                 </p>
 
                 <div className="space-y-[10px]">
-                    {profiles.map((profile) => (
+                    {currentProfile && (
                         <button
-                            key={profile.id}
+                            key={currentProfile.id}
                             type="button"
-                            onClick={() => navigate(`/profile/${profile.id}`)}
+                            onClick={() => navigate(`/profile/${currentProfile.id}`)}
                             className="w-full rounded-[10px] border border-[#3B91C0] bg-white px-[10px] py-[10px] text-left"
                         >
                             <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <p className="text-[#000000] font-bold text-[12px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                                        {profile.fullName}
+                                        {currentProfile.fullName}
                                     </p>
                                     <p className="text-[#000000] text-[11px] mt-[2px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                                        {profile.role}
+                                        {currentProfile.role}
                                     </p>
                                     <p className="text-[#4B5563] text-[10px] mt-[4px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                                        ID : {profile.employeeNumber || '-'}
+                                        ID : {currentProfile.employeeNumber || '-'}
                                     </p>
                                 </div>
                                 <ChevronRight size={18} className="text-[#1E1E1E] shrink-0" strokeWidth={2.2} />
                             </div>
                         </button>
-                    ))}
+                    )}
+
+                    {!currentProfile && (
+                        <p className="text-[#4B5563] text-[12px]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                            Profil akun tidak ditemukan.
+                        </p>
+                    )}
+                </div>
+
+                <div className="mt-auto pt-[14px] pb-[8px]">
+                    <button
+                        type="button"
+                        onClick={handleLogout}
+                        className="w-full rounded-[10px] border border-[#E53E3E] bg-[#FFF5F5] px-[12px] py-[10px] text-[#C53030] font-semibold text-[12px] flex items-center justify-center gap-2"
+                    >
+                        <LogOut size={16} />
+                        Logout
+                    </button>
                 </div>
             </div>
 

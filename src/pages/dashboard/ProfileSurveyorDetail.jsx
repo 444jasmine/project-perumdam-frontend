@@ -2,14 +2,30 @@ import React, { useState } from 'react';
 import { ChevronLeft, UserRound } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
-import { getSurveyorProfileById, saveSurveyorProfile } from './profileStorage';
+import {
+  getCurrentSurveyorProfile,
+  getCurrentSurveyorProfileId,
+  saveSurveyorProfile,
+} from './profileStorage';
 
 const ProfileSurveyorDetail = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [profile, setProfile] = useState(() => getSurveyorProfileById(id));
+  const currentProfileId = getCurrentSurveyorProfileId();
+  const [profile, setProfile] = useState(() => getCurrentSurveyorProfile());
   const [isEditing, setIsEditing] = useState(false);
   const [message, setMessage] = useState('');
+
+  React.useEffect(() => {
+    if (!currentProfileId) {
+      navigate('/profile', { replace: true });
+      return;
+    }
+
+    if (id && String(id) !== String(currentProfileId)) {
+      navigate(`/profile/${currentProfileId}`, { replace: true });
+    }
+  }, [id, currentProfileId, navigate]);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -20,10 +36,18 @@ const ProfileSurveyorDetail = () => {
   };
 
   const handleSave = () => {
-    saveSurveyorProfile(id, profile);
+    if (!currentProfileId) {
+      return;
+    }
+
+    saveSurveyorProfile(currentProfileId, profile);
     setIsEditing(false);
     navigate('/profile');
   };
+
+  if (!profile) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FBFF] flex flex-col relative w-full h-full pb-[88px]">

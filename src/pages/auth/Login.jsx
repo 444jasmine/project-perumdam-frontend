@@ -3,6 +3,8 @@ import { ChevronLeft, Eye, EyeOff, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import Input from '../../components/ui/Input';
 import Button from '../../components/ui/Button';
+import { login } from '../../api';
+import { setAuthToken } from '../../auth';
 
 const Login = () => {
     const navigate = useNavigate();
@@ -17,6 +19,7 @@ const Login = () => {
         username: '',
         password: ''
     });
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -30,20 +33,19 @@ const Login = () => {
         }
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
         let newErrors = { username: '', password: '' };
         let hasError = false;
 
-        // Dummy authentication validation
-        if (formData.username !== 'admin') {
-            newErrors.username = 'Username tidak valid';
+        if (!formData.username.trim()) {
+            newErrors.username = 'Username wajib diisi';
             hasError = true;
         }
 
-        if (formData.username === 'admin' && formData.password !== 'admin') {
-            newErrors.password = 'Password salah';
+        if (!formData.password.trim()) {
+            newErrors.password = 'Password wajib diisi';
             hasError = true;
         }
 
@@ -52,34 +54,60 @@ const Login = () => {
             return;
         }
 
-        console.log('Login success:', formData);
-        // Simulate successful login and navigate to home
-        navigate('/home');
+        setIsSubmitting(true);
+
+        try {
+            const result = await login(formData.username, formData.password);
+
+            if (!result?.token) {
+                throw new Error('Token tidak ditemukan dari server');
+            }
+
+            setAuthToken(result.token);
+            navigate('/home', { replace: true });
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Login gagal';
+
+            setErrors({
+                username: '',
+                password: message
+            });
+        } finally {
+            setIsSubmitting(false);
+        }
     };
 
     return (
-        <div className="min-h-screen bg-white flex flex-col p-6">
-            {/* Header */}
-            <div className="flex items-center mb-10 mt-6 px-2 w-full max-w-[400px] mx-auto">
+        <div className="min-h-screen px-5 py-6 flex flex-col bg-[linear-gradient(180deg,rgba(245,251,255,0.96)_0%,rgba(232,243,250,0.98)_100%)]">
+            <div className="flex items-center mb-6 px-1 w-full">
                 <button
                     onClick={() => navigate(-1)}
-                    className="p-2 text-[#1E1E1E] hover:bg-gray-100 rounded-full transition-colors active:scale-95"
+                    className="p-2 text-[#0f3553] hover:bg-white/80 rounded-full transition-colors active:scale-95"
                 >
                     <ChevronLeft size={24} />
                 </button>
             </div>
 
-            {/* Main Content */}
-            <div className="flex-1 flex flex-col items-center w-full px-4">
-                <div className="text-center mb-[42px] mt-4">
-                    <h1 className="text-[#1E576F] font-bold text-[32px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Montserrat, sans-serif' }}>Login</h1>
-                    <p className="text-black text-[16px] leading-[150%] tracking-[-0.011em] mt-2 max-w-[300px] mx-auto opacity-90" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <div className="flex-1 flex flex-col items-center justify-center w-full px-1 pb-3">
+                <div className="hero-card w-full px-5 py-6 text-center mb-5">
+                    <div className="brand-row justify-center mb-4">
+                        <div className="brand-badge">
+                            <span className="font-extrabold text-[15px]">P</span>
+                        </div>
+                        <div className="text-left">
+                            <p className="m-0 text-[11px] uppercase tracking-[0.2em] text-[#0a7db7] font-bold">Perumdam Bantul</p>
+                            <p className="m-0 text-[13px] text-[#527085]">Survey System</p>
+                        </div>
+                    </div>
+
+                    <h1 className="page-title text-[30px]">Login</h1>
+                    <p className="page-subtitle max-w-[290px] mx-auto">
                         Untuk masuk ke akun di aplikasi, masukkan username dan password.
                     </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="w-full max-w-[303px] flex flex-col animate-[fadeIn_0.5s_ease-out]">
-                    <div className="mb-4">
+                <form onSubmit={handleSubmit} className="section-card w-full px-4 py-5 flex flex-col animate-[fadeIn_0.5s_ease-out]">
+                    <div>
                         <Input
                             label="Username"
                             name="username"
@@ -110,8 +138,8 @@ const Login = () => {
                             }
                         />
 
-                        <div className="flex flex-col gap-[12px] mt-[26px] mb-[60px] pl-2">
-                            <label className="flex items-center text-[16px] leading-[140%] text-[#1E1E1E] cursor-pointer group" style={{ fontFamily: 'Inter' }}>
+                        <div className="flex flex-col gap-[12px] mt-[22px] mb-[28px] pl-2">
+                            <label className="flex items-center text-[14px] leading-[140%] text-[#173043] cursor-pointer group" style={{ fontFamily: 'Inter' }}>
                                 <input
                                     type="checkbox"
                                     name="rememberMe"
@@ -128,7 +156,7 @@ const Login = () => {
                                 Remember me
                             </label>
 
-                            <label className="flex items-center text-[16px] leading-[140%] text-[#1E1E1E] cursor-pointer group" style={{ fontFamily: 'Inter' }}>
+                            <label className="flex items-center text-[14px] leading-[140%] text-[#173043] cursor-pointer group" style={{ fontFamily: 'Inter' }}>
                                 <input
                                     type="checkbox"
                                     name="keepMeLogin"
@@ -146,13 +174,13 @@ const Login = () => {
                             </label>
                         </div>
 
-                        <Button type="submit">
-                            Login
+                        <Button type="submit" disabled={isSubmitting} className="!max-w-none !h-[52px] !text-[18px]">
+                            {isSubmitting ? 'Memproses...' : 'Login'}
                         </Button>
 
-                        <div className="text-center mt-6">
-                            <p className="text-[13px] leading-[150%] tracking-[-0.011em] text-black" style={{ fontFamily: 'Inter' }}>
-                                Lupa password? <a href="#" className="font-bold">Hubungi admin</a>
+                        <div className="text-center mt-5">
+                            <p className="text-[12px] leading-[150%] tracking-[-0.011em] text-[#527085]" style={{ fontFamily: 'Inter' }}>
+                                Lupa password? <a href="#" className="text-link">Hubungi admin</a>
                             </p>
                         </div>
                     </div>

@@ -2,13 +2,12 @@ import React, { useMemo, useState } from 'react';
 import { ChevronLeft, Camera, ImagePlus } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
-import { createSurvey, uploadDocument } from '../../api';
+import { createSurvey, getCustomerById, getItems, updateCustomerStatus, uploadDocument } from '../../api';
 import { getPelangganById } from './surveyData';
 import {
   clearSurveyDraft,
   getSurveyDraft,
   setSurveyResultIdByCustomerId,
-  setStoredStatusByCustomerId,
 } from './surveyStorage';
 
 const formatCurrency = (value) => Number(value || 0).toLocaleString('id-ID');
@@ -16,14 +15,100 @@ const formatCurrency = (value) => Number(value || 0).toLocaleString('id-ID');
 const RekapRab = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const pelanggan = getPelangganById(id);
-  const draft = getSurveyDraft(id);
+  const normalizedCustomerId = decodeURIComponent(String(id || '')).trim();
+  const [apiCustomer, setApiCustomer] = useState(null);
+  const pelanggan = apiCustomer || getPelangganById(normalizedCustomerId);
+  const draft = getSurveyDraft(normalizedCustomerId);
 
   const [mediaSlots, setMediaSlots] = useState([null, null, null]);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState('');
+  const [itemPrices, setItemPrices] = useState({});
 
-  const kebutuhan = Array.isArray(draft?.kebutuhan) ? draft.kebutuhan : [];
+  React.useEffect(() => {
+    let mounted = true;
+
+    const loadCustomer = async () => {
+      if (!normalizedCustomerId) {
+        return;
+      }
+
+      try {
+        const customer = await getCustomerById(normalizedCustomerId);
+        if (mounted) {
+          setApiCustomer(customer);
+        }
+      } catch {
+        if (mounted) {
+          setApiCustomer(null);
+        }
+      }
+    };
+
+    loadCustomer();
+
+    return () => {
+      mounted = false;
+    };
+  }, [normalizedCustomerId]);
+
+  React.useEffect(() => {
+    let mounted = true;
+
+    const loadItemPrices = async () => {
+      try {
+        const data = await getItems();
+        if (!mounted) {
+          return;
+        }
+
+        const map = {};
+        (Array.isArray(data) ? data : []).forEach((item) => {
+          const key = String(item?._id || '');
+          map[key] = Number(item?.price || 0);
+        });
+
+        setItemPrices(map);
+      } catch {
+        if (!mounted) {
+          return;
+        }
+
+        setItemPrices({});
+      }
+    };
+
+    loadItemPrices();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const kebutuhan = useMemo(() => {
+    const baseRows = Array.isArray(draft?.kebutuhan) ? draft.kebutuhan : [];
+
+    return baseRows.map((row) => {
+      const price = Number(row?.price || 0);
+      const qty = Number(row?.qty || 0);
+      const subtotal = Number(row?.subtotal || 0);
+
+      if (price > 0 && subtotal > 0) {
+        return row;
+      }
+
+      const fallbackPrice = Number(itemPrices[String(row?.itemId || '')] || 0);
+      if (fallbackPrice <= 0 || qty <= 0) {
+        return row;
+      }
+
+      return {
+        ...row,
+        price: fallbackPrice,
+        subtotal: qty * fallbackPrice,
+      };
+    });
+  }, [draft?.kebutuhan, itemPrices]);
 
   const groupedRows = useMemo(() => {
     const groups = new Map();
@@ -87,21 +172,30 @@ const RekapRab = () => {
         const payload = {
           title: `Survey ${pelanggan?.name || id}`,
           description: `Rekap RAB - ${pelanggan?.rab || '-'}`,
-          items: kebutuhan
-            .map((row) => row.itemId)
-            .filter((value) => typeof value === 'string' && value.length > 0),
+          customerId: normalizedCustomerId,
+          vcNama: pelanggan?.name || '',
+          vcAlmt1: pelanggan?.alamat || '',
+          status: status,
+          items: kebutuhan.map((row) => ({
+            itemId: String(row.itemId || ''),
+            name: String(row.name || 'Item'),
+            satuan: String(row.satuan || '-'),
+            price: Number(row.price || 0),
+            quantity: Number(row.qty || 1),
+            subtotal: Number(row.subtotal || 0),
+          })),
         };
 
         const created = await createSurvey(payload);
         const createdId = created?.data?._id || created?._id || null;
         if (createdId) {
-          setSurveyResultIdByCustomerId(id, String(createdId));
+          setSurveyResultIdByCustomerId(normalizedCustomerId, String(createdId));
         }
       }
 
-      setStoredStatusByCustomerId(id, status);
+      await updateCustomerStatus(normalizedCustomerId, status);
       if (status === 'Selesai') {
-        clearSurveyDraft(id);
+        clearSurveyDraft(normalizedCustomerId);
       }
 
       const nextMessage = uploadSummary.failedCount > 0
@@ -201,10 +295,10 @@ const RekapRab = () => {
         </div>
 
         <div className="h-[44px] rounded-[8px] border border-[#3B91C0] bg-white px-[10px] flex items-center justify-between">
-          <span className="text-[31px] font-bold leading-none text-[#1E1E1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="text-[20px] font-bold leading-none text-[#1E1E1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
             TOTAL
           </span>
-          <span className="text-[38px] font-bold leading-none text-[#1E1E1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
+          <span className="text-[24px] font-bold leading-none text-[#1E1E1E]" style={{ fontFamily: 'Inter, sans-serif' }}>
             {formatCurrency(total)}
           </span>
         </div>
@@ -214,7 +308,7 @@ const RekapRab = () => {
             type="button"
             onClick={() => submitStatus('Draft')}
             disabled={submitting}
-            className="h-[42px] rounded-[9px] font-bold text-[20px] text-[#003654] disabled:opacity-70"
+            className="h-[42px] rounded-[9px] font-bold text-[14px] text-[#003654] disabled:opacity-70"
             style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#75C8EA' }}
           >
             DRAFT
@@ -223,7 +317,7 @@ const RekapRab = () => {
             type="button"
             onClick={() => submitStatus('Selesai')}
             disabled={submitting}
-            className="h-[42px] rounded-[9px] font-bold text-[20px] text-[#003654] disabled:opacity-70"
+            className="h-[42px] rounded-[9px] font-bold text-[14px] text-[#003654] disabled:opacity-70"
             style={{ fontFamily: 'Inter, sans-serif', backgroundColor: '#75C8EA' }}
           >
             SIMPAN

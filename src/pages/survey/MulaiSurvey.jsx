@@ -1,14 +1,32 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronDown, PlusSquare } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
-import { getItems } from '../../api';
+import { getCustomerById, getItems } from '../../api';
 import { getPelangganById } from './surveyData';
-import { saveSurveyDraft } from './surveyStorage';
-
-const FALLBACK_QTY_OPTIONS = Array.from({ length: 20 }, (_, i) => i + 1);
+import { getSurveyDraft, saveSurveyDraft } from './surveyStorage';
 
 const formatCurrency = (value) => Number(value || 0).toLocaleString('id-ID');
+
+const getDisplayItemName = (item) => {
+  const raw = String(item?.name || '').trim();
+
+  if (!raw) {
+    return '-';
+  }
+
+  let cleaned = raw;
+
+  // Beberapa data berisi gabungan tuple SQL (contoh: "...,NULL),(219,2,...")
+  // sehingga kita hanya ambil bagian nama pertama yang valid.
+  cleaned = cleaned.replace(/'\s*,\s*NULL\)\s*,\s*\(.*/i, '');
+  cleaned = cleaned.replace(/'\s*,\s*\d+\s*\)\s*,\s*\(.*/i, '');
+  cleaned = cleaned.replace(/\)\s*,\s*\(\d+\s*,\s*\d+\s*,\s*'.*$/i, '');
+  cleaned = cleaned.replace(/'\s*,\s*\d+\s*,\s*\d+\s*,\s*'.*$/i, '');
+  cleaned = cleaned.replace(/[',\s]+$/, '').trim();
+
+  return cleaned || '-';
+};
 
 const getCategoryKey = (item) => {
   if (item.idkategori !== undefined && item.idkategori !== null) {
@@ -23,6 +41,18 @@ const getCategoryKey = (item) => {
 };
 
 const getCategoryLabel = (key, sampleItem) => {
+  if (key === '1') {
+    return 'Paket';
+  }
+
+  if (key === '2') {
+    return 'Aksesoris';
+  }
+
+  if (key === '3') {
+    return 'Jasa';
+  }
+
   if (sampleItem?.kategori) {
     return String(sampleItem.kategori);
   }
@@ -38,35 +68,12 @@ const getCategoryLabel = (key, sampleItem) => {
   return `Kategori ${key}`;
 };
 
-const normalizeJumlahOptions = (item) => {
-  if (!item || typeof item !== 'object') {
-    return FALLBACK_QTY_OPTIONS;
-  }
-
-  if (Array.isArray(item.jumlahOptions) && item.jumlahOptions.length > 0) {
-    return item.jumlahOptions
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value > 0);
-  }
-
-  if (Array.isArray(item.qtyOptions) && item.qtyOptions.length > 0) {
-    return item.qtyOptions
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value > 0);
-  }
-
-  if (item.maxQty !== undefined && Number(item.maxQty) > 0) {
-    const max = Math.min(100, Number(item.maxQty));
-    return Array.from({ length: max }, (_, i) => i + 1);
-  }
-
-  return FALLBACK_QTY_OPTIONS;
-};
-
 const MulaiSurvey = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-  const pelanggan = getPelangganById(id);
+  const normalizedCustomerId = decodeURIComponent(String(id || '')).trim();
+  const [apiCustomer, setApiCustomer] = useState(null);
+  const pelanggan = apiCustomer || getPelangganById(normalizedCustomerId);
 
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -74,9 +81,69 @@ const MulaiSurvey = () => {
 
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedItemId, setSelectedItemId] = useState('');
+  const [itemSearch, setItemSearch] = useState('');
   const [selectedQty, setSelectedQty] = useState('1');
-  const [selectedUnit, setSelectedUnit] = useState('');
   const [kebutuhan, setKebutuhan] = useState([]);
+  const [isDraftHydrated, setIsDraftHydrated] = useState(false);
+  const hasMigratedDraftPricesRef = useRef(false);
+
+  useEffect(() => {
+    const draft = getSurveyDraft(normalizedCustomerId);
+
+    if (!draft) {
+      setIsDraftHydrated(true);
+      return;
+    }
+
+    if (Array.isArray(draft.kebutuhan)) {
+      setKebutuhan(draft.kebutuhan);
+    }
+
+    if (draft.selectedCategory) {
+      setSelectedCategory(String(draft.selectedCategory));
+    }
+
+    if (draft.selectedItemId) {
+      setSelectedItemId(String(draft.selectedItemId));
+    }
+
+    if (draft.itemSearch !== undefined) {
+      setItemSearch(String(draft.itemSearch));
+    }
+
+    if (draft.selectedQty !== undefined) {
+      setSelectedQty(String(draft.selectedQty));
+    }
+
+    setIsDraftHydrated(true);
+  }, [normalizedCustomerId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadCustomer = async () => {
+      if (!normalizedCustomerId) {
+        return;
+      }
+
+      try {
+        const customer = await getCustomerById(normalizedCustomerId);
+        if (mounted) {
+          setApiCustomer(customer);
+        }
+      } catch {
+        if (mounted) {
+          setApiCustomer(null);
+        }
+      }
+    };
+
+    loadCustomer();
+
+    return () => {
+      mounted = false;
+    };
+  }, [normalizedCustomerId]);
 
   useEffect(() => {
     const loadItems = async () => {
@@ -90,7 +157,7 @@ const MulaiSurvey = () => {
 
         if (nextItems.length > 0) {
           const firstCategory = getCategoryKey(nextItems[0]);
-          setSelectedCategory(firstCategory);
+          setSelectedCategory((current) => current || firstCategory);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Gagal memuat item dari backend';
@@ -126,10 +193,22 @@ const MulaiSurvey = () => {
     }
   }, [selectedCategory, categoryOptions]);
 
-  const filteredItems = useMemo(
-    () => items.filter((item) => getCategoryKey(item) === selectedCategory),
-    [items, selectedCategory]
-  );
+  const filteredItems = useMemo(() => {
+    const keyword = itemSearch.trim().toLowerCase();
+
+    return items.filter((item) => {
+      const inCategory = getCategoryKey(item) === selectedCategory;
+      if (!inCategory) {
+        return false;
+      }
+
+      if (!keyword) {
+        return true;
+      }
+
+      return getDisplayItemName(item).toLowerCase().includes(keyword);
+    });
+  }, [items, selectedCategory, itemSearch]);
 
   useEffect(() => {
     if (filteredItems.length === 0) {
@@ -149,42 +228,50 @@ const MulaiSurvey = () => {
     [filteredItems, selectedItemId]
   );
 
-  const qtyOptions = useMemo(() => normalizeJumlahOptions(selectedItem), [selectedItem]);
+  const selectedUnit = String(selectedItem?.satuan || '-');
 
   useEffect(() => {
-    if (qtyOptions.length === 0) {
-      setSelectedQty('1');
+    if (hasMigratedDraftPricesRef.current) {
       return;
     }
 
-    const qtyExists = qtyOptions.some((value) => String(value) === selectedQty);
-    if (!qtyExists) {
-      setSelectedQty(String(qtyOptions[0]));
+    if (items.length === 0 || kebutuhan.length === 0) {
+      return;
     }
-  }, [qtyOptions, selectedQty]);
 
-  const unitOptions = useMemo(() => {
-    const options = new Set();
+    const itemPriceMap = new Map(
+      items.map((item) => [String(item?._id || ''), Number(item?.price || 0)])
+    );
 
-    for (const item of filteredItems) {
-      if (item?.satuan) {
-        options.add(String(item.satuan));
+    let hasChanges = false;
+    const migrated = kebutuhan.map((row) => {
+      const currentPrice = Number(row?.price || 0);
+      const currentSubtotal = Number(row?.subtotal || 0);
+      const qty = Number(row?.qty || 0);
+      const fallbackPrice = itemPriceMap.get(String(row?.itemId || '')) || 0;
+
+      if (currentPrice > 0 && currentSubtotal > 0) {
+        return row;
       }
-    }
 
-    return Array.from(options);
-  }, [filteredItems]);
+      if (fallbackPrice <= 0 || qty <= 0) {
+        return row;
+      }
 
-  useEffect(() => {
-    if (selectedItem?.satuan) {
-      setSelectedUnit(String(selectedItem.satuan));
-      return;
-    }
+      hasChanges = true;
+      return {
+        ...row,
+        price: fallbackPrice,
+        subtotal: qty * fallbackPrice,
+      };
+    });
 
-    if (unitOptions.length > 0 && !unitOptions.includes(selectedUnit)) {
-      setSelectedUnit(unitOptions[0]);
+    hasMigratedDraftPricesRef.current = true;
+
+    if (hasChanges) {
+      setKebutuhan(migrated);
     }
-  }, [selectedItem, unitOptions, selectedUnit]);
+  }, [items, kebutuhan]);
 
   const subtotal = useMemo(() => {
     return kebutuhan.reduce((sum, row) => sum + Number(row.subtotal || 0), 0);
@@ -196,15 +283,19 @@ const MulaiSurvey = () => {
     }
 
     const qty = Number(selectedQty || 1);
+    if (!Number.isFinite(qty) || qty <= 0) {
+      return;
+    }
+
     const price = Number(selectedItem.price || 0);
     const next = {
       rowId: `${selectedItem._id}-${Date.now()}`,
       itemId: selectedItem._id,
       categoryKey: selectedCategory,
       categoryLabel: categoryOptions.find((item) => item.value === selectedCategory)?.label || selectedCategory,
-      name: selectedItem.name,
+      name: getDisplayItemName(selectedItem),
       qty,
-      satuan: selectedUnit || selectedItem.satuan || '-',
+      satuan: selectedUnit,
       price,
       subtotal: qty * price
     };
@@ -212,17 +303,40 @@ const MulaiSurvey = () => {
     setKebutuhan((prev) => [...prev, next]);
   };
 
-  const handleSelesai = () => {
-    saveSurveyDraft(id, {
-      customerId: id,
+  useEffect(() => {
+    if (!normalizedCustomerId || !isDraftHydrated) {
+      return;
+    }
+
+    saveSurveyDraft(normalizedCustomerId, {
+      customerId: normalizedCustomerId,
       customerName: pelanggan?.name || 'Pelanggan',
       rab: pelanggan?.rab || '-',
       kebutuhan,
       total: subtotal,
+      selectedCategory,
+      selectedItemId,
+      itemSearch,
+      selectedQty,
+      updatedAt: new Date().toISOString(),
+    });
+  }, [normalizedCustomerId, pelanggan?.name, pelanggan?.rab, kebutuhan, subtotal, selectedCategory, selectedItemId, itemSearch, selectedQty, isDraftHydrated]);
+
+  const handleSelesai = () => {
+    saveSurveyDraft(normalizedCustomerId, {
+      customerId: normalizedCustomerId,
+      customerName: pelanggan?.name || 'Pelanggan',
+      rab: pelanggan?.rab || '-',
+      kebutuhan,
+      total: subtotal,
+      selectedCategory,
+      selectedItemId,
+      itemSearch,
+      selectedQty,
       updatedAt: new Date().toISOString(),
     });
 
-    navigate(`/survey/${id}/rekap-rab`);
+    navigate(`/survey/${encodeURIComponent(normalizedCustomerId)}/rekap-rab`);
   };
 
   return (
@@ -258,10 +372,10 @@ const MulaiSurvey = () => {
               No. RAB : {pelanggan?.rab || id || '-'}
             </p>
             <p className="text-[#000000] text-[11px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Alamat :
+              Alamat : {pelanggan?.alamat || '-'}
             </p>
             <p className="text-[#000000] text-[11px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-              Telp :
+              Telp : {pelanggan?.telepon || pelanggan?.cTelp || pelanggan?.chp || '-'}
             </p>
           </div>
         </div>
@@ -297,28 +411,27 @@ const MulaiSurvey = () => {
                   label="Nama Barang"
                   value={selectedItemId}
                   onChange={setSelectedItemId}
+                  searchValue={itemSearch}
+                  onSearchChange={setItemSearch}
                   options={filteredItems.map((item) => ({
                     value: String(item._id),
-                    label: item.name || '-'
+                    label: getDisplayItemName(item)
                   }))}
                 />
 
-                <FieldSelect
+                <FieldInputNumber
                   label="Jumlah"
                   value={selectedQty}
                   onChange={setSelectedQty}
-                  options={qtyOptions.map((qty) => ({ value: String(qty), label: String(qty) }))}
                 />
 
-                <FieldSelect
+                <FieldReadOnly
                   label="Satuan"
                   value={selectedUnit}
-                  onChange={setSelectedUnit}
-                  options={unitOptions.map((unit) => ({ value: unit, label: unit }))}
                 />
               </div>
 
-              <div className="mt-[8px] rounded-[6px] bg-[#9DD6EC] h-[28px] px-[10px] flex items-center justify-between">
+              <div className="mt-[7px] rounded-[4px] bg-[#9DD6EC] h-[28px] px-[10px] flex items-center justify-between">
                 <span className="text-[12px] font-semibold text-[#003654]" style={{ fontFamily: 'Inter, sans-serif' }}>
                   SUBTOTAL
                 </span>
@@ -351,20 +464,34 @@ const MulaiSurvey = () => {
 
         {kebutuhan.length > 0 && (
           <div className="mt-[12px] rounded-[8px] bg-white border border-[#015E9C] p-[10px] max-h-[210px] overflow-auto">
-            <p className="text-[12px] font-bold text-[#003654] mb-[6px]" style={{ fontFamily: 'Inter, sans-serif' }}>
+            <p className="text-[13px] font-extrabold text-[#003654] mb-[8px] text-center" style={{ fontFamily: 'Inter, sans-serif' }}>
               Daftar Kebutuhan
             </p>
-            <div className="space-y-[6px]">
-              {kebutuhan.map((row) => (
+            <div className="text-[10px] font-bold text-[#003654] bg-[#E7F4FB] rounded-t-[6px] border-l border-r border-t border-b border-[#C2E2F3] overflow-hidden">
+              <div className="grid grid-cols-[minmax(0,1fr)_88px_56px_110px] gap-0 px-[8px] py-[6px]">
+                <span className="tracking-[0.2px] text-center block border-r border-[#C2E2F3] pr-[8px]">Produk Dipesan</span>
+                <span className="tracking-[0.2px] flex justify-center w-full border-r border-[#C2E2F3]">Harga Satuan</span>
+                <span className="tracking-[0.2px] flex justify-center w-full border-r border-[#C2E2F3]">Jumlah</span>
+                <span className="tracking-[0.2px] flex justify-center w-full">Subtotal Produk</span>
+              </div>
+            </div>
+            <div className="border-l border-r border-[#C2E2F3]">
+              {kebutuhan.map((row, idx) => (
                 <div
                   key={row.rowId}
-                  className="text-[11px] border border-[#D7ECF5] rounded-[6px] px-[8px] py-[6px] bg-[#F7FCFF]"
+                  className={`text-[11px] bg-[#F7FCFF] grid grid-cols-[minmax(0,1fr)_88px_56px_110px] gap-0 items-center px-[8px] py-[6px] ${
+                    idx === kebutuhan.length - 1
+                      ? 'border-b border-[#C2E2F3] rounded-b-[6px]'
+                      : 'border-b border-[#C2E2F3]'
+                  }`}
                   style={{ fontFamily: 'Inter, sans-serif' }}
                 >
-                  <p className="font-semibold text-[#003654]">{row.name}</p>
-                  <p className="text-[#1E1E1E]">
-                    {row.qty} {row.satuan} x {formatCurrency(row.price)} = {formatCurrency(row.subtotal)}
+                  <p className="font-semibold text-[#003654] truncate text-center border-r border-[#C2E2F3] pr-[8px]" title={getDisplayItemName({ name: row.name })}>
+                    {getDisplayItemName({ name: row.name })}
                   </p>
+                  <span className="text-[#1E1E1E] flex justify-center w-full border-r border-[#C2E2F3]">{formatCurrency(row.price)}</span>
+                  <span className="text-[#1E1E1E] flex justify-center w-full border-r border-[#C2E2F3]">{row.qty}</span>
+                  <span className="font-semibold text-[#003654] flex justify-center w-full">{formatCurrency(row.subtotal)}</span>
                 </div>
               ))}
             </div>
@@ -377,29 +504,153 @@ const MulaiSurvey = () => {
   );
 };
 
-const FieldSelect = ({ label, value, onChange, options }) => {
+const FieldSelect = ({ label, value, onChange, options, searchValue = '', onSearchChange }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const wrapperRef = useRef(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, []);
+
+  const selectedOption = options.find((option) => option.value === value);
+
   return (
     <label className="block">
       <span className="text-[12px] text-[#003654] font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
         {label}
       </span>
-      <div className="relative mt-[2px]">
-        <select
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="w-full h-[31px] rounded-[7px] bg-white border border-[#9ECFE4] px-[10px] pr-[28px] text-[12px] text-[#1E1E1E] appearance-none outline-none"
+      {typeof onSearchChange === 'function' && (
+        <input
+          type="text"
+          value={searchValue}
+          onChange={(event) => {
+            onSearchChange(event.target.value);
+            setIsOpen(true);
+          }}
+          onFocus={() => setIsOpen(true)}
+          placeholder="Cari nama barang"
+          className="w-full h-[31px] rounded-[7px] bg-white border border-[#9ECFE4] px-[10px] text-[12px] text-[#1E1E1E] outline-none mt-[2px]"
           style={{ fontFamily: 'Inter, sans-serif' }}
-        >
-          {options.length === 0 && <option value="">-</option>}
-          {options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <div className="absolute inset-y-0 right-0 pr-[8px] flex items-center pointer-events-none text-[#015E9C]">
-          <ChevronDown size={14} strokeWidth={2} />
+        />
+      )}
+      {typeof onSearchChange === 'function' ? (
+        <div className="relative mt-[2px]" ref={wrapperRef}>
+          <button
+            type="button"
+            onClick={() => setIsOpen((prev) => !prev)}
+            className="w-full h-[31px] rounded-[7px] bg-white border border-[#9ECFE4] px-[10px] pr-[28px] text-[12px] text-[#1E1E1E] text-left outline-none"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            {selectedOption?.label || '-'}
+          </button>
+          <div className="absolute inset-y-0 right-0 pr-[8px] flex items-center pointer-events-none text-[#015E9C]">
+            <ChevronDown size={14} strokeWidth={2} className={isOpen ? 'rotate-180 transition-transform' : 'transition-transform'} />
+          </div>
+
+          {isOpen && (
+            <div className="absolute z-30 mt-[3px] w-full rounded-[7px] border border-[#9ECFE4] bg-white shadow-md max-h-[260px] overflow-auto">
+              {options.length === 0 && (
+                <p className="px-[10px] py-[8px] text-[12px] text-[#6b7280]" style={{ fontFamily: 'Inter, sans-serif' }}>
+                  Barang tidak ditemukan
+                </p>
+              )}
+
+              {options.map((option) => {
+                const isSelected = option.value === value;
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => {
+                      onChange(option.value);
+                      onSearchChange(option.label);
+                      setIsOpen(false);
+                    }}
+                    className={`w-full text-left px-[10px] py-[8px] text-[12px] border-b border-[#eef6fb] last:border-b-0 ${
+                      isSelected ? 'bg-[#E9F6FD] text-[#003654] font-semibold' : 'text-[#1E1E1E] hover:bg-[#F5FBFF]'
+                    }`}
+                    style={{ fontFamily: 'Inter, sans-serif' }}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
+      ) : (
+        <div className="relative mt-[2px]">
+          <select
+            value={value}
+            onChange={(event) => onChange(event.target.value)}
+            className="w-full h-[31px] rounded-[7px] bg-white border border-[#9ECFE4] px-[10px] pr-[28px] text-[12px] text-[#1E1E1E] appearance-none outline-none"
+            style={{ fontFamily: 'Inter, sans-serif' }}
+          >
+            {options.length === 0 && <option value="">-</option>}
+            {options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <div className="absolute inset-y-0 right-0 pr-[8px] flex items-center pointer-events-none text-[#015E9C]">
+            <ChevronDown size={14} strokeWidth={2} />
+          </div>
+        </div>
+      )}
+    </label>
+  );
+};
+
+const FieldInputNumber = ({ label, value, onChange }) => {
+  return (
+    <label className="block">
+      <span className="text-[12px] text-[#003654] font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
+        {label}
+      </span>
+      <input
+        type="number"
+        min="1"
+        step="1"
+        inputMode="numeric"
+        value={value}
+        onChange={(event) => {
+          const nextValue = event.target.value;
+          if (nextValue === '') {
+            onChange('');
+            return;
+          }
+
+          if (/^\d+$/.test(nextValue)) {
+            onChange(String(Math.max(1, Number(nextValue))));
+          }
+        }}
+        className="w-full h-[31px] rounded-[7px] bg-white border border-[#9ECFE4] px-[10px] text-[12px] text-[#1E1E1E] outline-none mt-[2px]"
+        style={{ fontFamily: 'Inter, sans-serif' }}
+      />
+    </label>
+  );
+};
+
+const FieldReadOnly = ({ label, value }) => {
+  return (
+    <label className="block">
+      <span className="text-[12px] text-[#003654] font-semibold" style={{ fontFamily: 'Inter, sans-serif' }}>
+        {label}
+      </span>
+      <div
+        className="w-full h-[31px] rounded-[7px] bg-[#E9F6FD] border border-[#9ECFE4] px-[10px] text-[12px] text-[#1E1E1E] mt-[2px] flex items-center"
+        style={{ fontFamily: 'Inter, sans-serif' }}
+      >
+        {value || '-'}
       </div>
     </label>
   );

@@ -13,27 +13,36 @@ import MulaiSurvey from './pages/survey/MulaiSurvey';
 import RekapRab from './pages/survey/RekapRab';
 import HasilSurvey from './pages/survey/HasilSurvey';
 import PreviewNotaSurvey from './pages/survey/PreviewNotaSurvey';
+import { hasValidSession } from './auth';
+
+function ProtectedRoute({ children }) {
+    return hasValidSession() ? children : <Navigate to="/login" replace />;
+}
+
+function GuestRoute({ children }) {
+    return hasValidSession() ? <Navigate to="/home" replace /> : children;
+}
 
 function App() {
     return (
         <BrowserRouter>
-            <div className="w-full min-h-screen bg-gray-50 flex justify-center overflow-x-hidden">
-                <div className="w-full max-w-[420px] bg-white shadow-xl min-h-screen relative overflow-x-hidden">
+            <div className="app-shell overflow-x-hidden">
+                <div className="app-frame">
                     <Routes>
-                        <Route path="/splash" element={<Splash />} />
-                        <Route path="/welcome" element={<Welcome />} />
-                        <Route path="/login" element={<Login />} />
-                        <Route path="/home" element={<Home />} />
-                        <Route path="/profile" element={<ProfileSurveyor />} />
-                        <Route path="/profile/:id" element={<ProfileSurveyorDetail />} />
-                        <Route path="/list-surveyor" element={<ListSurveyor />} />
+                        <Route path="/splash" element={<GuestRoute><Splash /></GuestRoute>} />
+                        <Route path="/welcome" element={<GuestRoute><Welcome /></GuestRoute>} />
+                        <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+                        <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+                        <Route path="/profile" element={<ProtectedRoute><ProfileSurveyor /></ProtectedRoute>} />
+                        <Route path="/profile/:id" element={<ProtectedRoute><ProfileSurveyorDetail /></ProtectedRoute>} />
+                        <Route path="/list-surveyor" element={<ProtectedRoute><ListSurveyor /></ProtectedRoute>} />
                         <Route path="/" element={<Navigate to="/splash" replace />} />
-                        <Route path="/entri-survey" element={<EntriSurvey />} />
-                        <Route path="/hasil-survey" element={<HasilSurvey />} />
-                        <Route path="/hasil-survey/:id/nota" element={<PreviewNotaSurvey />} />
-                        <Route path="/survey/:id" element={<InformasiPelanggan />} />
-                        <Route path="/survey/:id/mulai" element={<MulaiSurvey />} />
-                        <Route path="/survey/:id/rekap-rab" element={<RekapRab />} />
+                        <Route path="/entri-survey" element={<ProtectedRoute><EntriSurvey /></ProtectedRoute>} />
+                        <Route path="/hasil-survey" element={<ProtectedRoute><HasilSurvey /></ProtectedRoute>} />
+                        <Route path="/hasil-survey/:id/nota" element={<ProtectedRoute><PreviewNotaSurvey /></ProtectedRoute>} />
+                        <Route path="/survey/:id" element={<ProtectedRoute><InformasiPelanggan /></ProtectedRoute>} />
+                        <Route path="/survey/:id/mulai" element={<ProtectedRoute><MulaiSurvey /></ProtectedRoute>} />
+                        <Route path="/survey/:id/rekap-rab" element={<ProtectedRoute><RekapRab /></ProtectedRoute>} />
 
                         {/* Catch all route - redirect to splash */}
                         <Route path="*" element={<Navigate to="/splash" replace />} />

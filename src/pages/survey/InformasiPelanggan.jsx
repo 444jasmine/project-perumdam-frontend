@@ -1,72 +1,75 @@
 import React, { useMemo, useState } from 'react';
-import { ChevronLeft, PlusSquare, ChevronDown } from 'lucide-react';
+import { ChevronLeft, PlusSquare } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import BottomNavigation from '../../components/layout/BottomNavigation';
+import { getCustomerById, updateCustomerStatus } from '../../api';
 import { getPelangganById } from './surveyData';
-import {
-    getCustomerFormByCustomerId,
-    getStoredStatusByCustomerId,
-    saveCustomerFormByCustomerId,
-    setStoredStatusByCustomerId,
-} from './surveyStorage';
-
-const STATUS_OPTIONS = ['Belum Survey', 'Draft', 'Selesai'];
-const SURVEYOR_OPTIONS = ['Nida', 'Fatih', 'Bintang'];
 
 const InformasiPelanggan = () => {
     const navigate = useNavigate();
     const { id } = useParams();
+    const normalizedCustomerId = decodeURIComponent(String(id || '')).trim();
+    const [apiCustomer, setApiCustomer] = useState(null);
+
+    React.useEffect(() => {
+        let mounted = true;
+
+        const loadCustomer = async () => {
+            if (!normalizedCustomerId) {
+                return;
+            }
+
+            try {
+                const customer = await getCustomerById(normalizedCustomerId);
+                if (mounted) {
+                    setApiCustomer(customer);
+                }
+            } catch {
+                if (mounted) {
+                    setApiCustomer(null);
+                }
+            }
+        };
+
+        loadCustomer();
+
+        return () => {
+            mounted = false;
+        };
+    }, [normalizedCustomerId]);
 
     // Mock data based on ID - in a real app, you'd fetch this using the ID
-    const customer = getPelangganById(id) || {
-        id,
+    const customer = apiCustomer || getPelangganById(normalizedCustomerId) || {
+        id: normalizedCustomerId,
         name: 'Pelanggan',
         rab: '-',
         alamat: 'Alamat Pelanggan',
+        telepon: '-',
         status: 'Belum disurvei'
     };
 
-    const savedForm = getCustomerFormByCustomerId(id);
-    const initialStatus = getStoredStatusByCustomerId(id) || customer.status || 'Belum disurvei';
-
-    const [form, setForm] = useState(() => ({
-        rab: savedForm?.rab || customer.rab || '',
-        alamat: savedForm?.alamat || customer.alamat || '',
-        email: savedForm?.email || '',
-        telepon: savedForm?.telepon || '',
-        statusSurvey: savedForm?.statusSurvey || (initialStatus === 'Belum disurvei' ? 'Belum Survey' : initialStatus),
-        surveyor: savedForm?.surveyor || 'Nida',
-    }));
+    const initialStatus = customer.status || 'Belum disurvei';
 
     const normalizedStatusLabel = useMemo(() => {
-        return form.statusSurvey === 'Belum Survey' ? 'Belum disurvei' : form.statusSurvey;
-    }, [form.statusSurvey]);
+        return initialStatus === 'Belum Survey' ? 'Belum disurvei' : initialStatus;
+    }, [initialStatus]);
 
-    const isDraft = form.statusSurvey === 'Draft';
+    const formattedTelepon = useMemo(() => {
+        const rawTelepon = String(customer?.telepon || customer?.cTelp || customer?.chp || '').trim();
+        return rawTelepon || '-';
+    }, [customer]);
+
+    const isDraft = normalizedStatusLabel === 'Draft';
     const buttonText = isDraft ? 'Lanjutkan Survey' : 'Mulai Survei';
 
-    const handleChange = (event) => {
-        const { name, value } = event.target;
-
-        if (name === 'telepon') {
-            const numericValue = value.replace(/\D/g, '').slice(0, 12);
-            setForm((current) => ({
-                ...current,
-                telepon: numericValue,
-            }));
-            return;
+    const handleContinue = async () => {
+        const nextStatus = normalizedStatusLabel === 'Belum disurvei' ? 'Draft' : normalizedStatusLabel;
+        try {
+            await updateCustomerStatus(normalizedCustomerId, nextStatus);
+        } catch {
+            // Continue navigation to avoid blocking workflow when network is unstable.
         }
-
-        setForm((current) => ({
-            ...current,
-            [name]: value,
-        }));
-    };
-
-    const handleContinue = () => {
-        saveCustomerFormByCustomerId(id, form);
-        setStoredStatusByCustomerId(id, normalizedStatusLabel);
-        navigate(`/survey/${id}/mulai`);
+        navigate(`/survey/${encodeURIComponent(normalizedCustomerId)}/mulai`);
     };
 
     return (
@@ -140,113 +143,10 @@ const InformasiPelanggan = () => {
                 {/* Divider */}
                 <div className="w-[318px] border-b-[3px] border-[#015E9C] mb-[20px]"></div>
 
-                {/* Form Fields */}
                 <div className="w-full flex flex-col gap-[12px] mb-[45px]">
-                    {/* No. RAB */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            No. RAB
-                        </label>
-                        <input
-                            type="text"
-                            name="rab"
-                            value={form.rab}
-                            onChange={handleChange}
-                            className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
-                        />
-                    </div>
-
-                    {/* Alamat Rumah */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Alamat Rumah
-                        </label>
-                        <input
-                            type="text"
-                            name="alamat"
-                            value={form.alamat}
-                            onChange={handleChange}
-                            className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
-                        />
-                    </div>
-
-                    {/* Email */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Email
-                        </label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={form.email}
-                            onChange={handleChange}
-                            className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
-                        />
-                    </div>
-
-                    {/* Nomor Telepon */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Nomor Telepon
-                        </label>
-                        <input
-                            type="tel"
-                            name="telepon"
-                            value={form.telepon}
-                            onChange={handleChange}
-                            inputMode="numeric"
-                            maxLength={12}
-                            pattern="[0-9]{0,12}"
-                            className="w-[306px] h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] focus:ring-1 focus:ring-[#015E9C]"
-                        />
-                        <small className="text-[#4B5563] text-[11px]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Maksimal 12 digit angka.
-                        </small>
-                    </div>
-
-                    {/* Status Survey (Dropdown) */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Status Survey
-                        </label>
-                        <div className="relative w-[306px]">
-                            <select
-                                name="statusSurvey"
-                                value={form.statusSurvey}
-                                onChange={handleChange}
-                                className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]"
-                            >
-                                {STATUS_OPTIONS.map((status) => (
-                                    <option key={status} value={status}>{status}</option>
-                                ))}
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-[#015E9C]">
-                                <ChevronDown size={18} strokeWidth={1.5} />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Surveyor (Dropdown) */}
-                    <div className="flex flex-col gap-[2px]">
-                        <label className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em]" style={{ fontFamily: 'Inter, sans-serif' }}>
-                            Surveyor
-                        </label>
-                        <div className="relative w-[306px]">
-                            <select
-                                name="surveyor"
-                                value={form.surveyor}
-                                onChange={handleChange}
-                                className="w-full h-[29px] border border-[#015E9C] bg-transparent outline-none px-2 text-[14px] text-[#000000] appearance-none focus:ring-1 focus:ring-[#015E9C]"
-                            >
-                                {SURVEYOR_OPTIONS.map((surveyor) => (
-                                    <option key={surveyor} value={surveyor}>{surveyor}</option>
-                                ))}
-                            </select>
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-[#015E9C]">
-                                <ChevronDown size={18} strokeWidth={1.5} />
-                            </div>
-                        </div>
-                    </div>
+                    <DataField label="No. RAB" value={customer?.rab || '-'} />
+                    <DataField label="Alamat Rumah" value={customer?.alamat || '-'} />
+                    <DataField label="Nomor Telepon" value={formattedTelepon} />
                 </div>
 
                 {/* Primary Action Button */}
@@ -270,5 +170,18 @@ const InformasiPelanggan = () => {
         </div>
     );
 };
+
+const DataField = ({ label, value }) => (
+    <div className="flex flex-col gap-[4px] w-[306px]">
+        <p className="text-[#000000] text-[16px] leading-[150%] tracking-[-0.011em] m-0" style={{ fontFamily: 'Inter, sans-serif' }}>
+            {label}
+        </p>
+        <div className="min-h-[34px] border border-[#015E9C] bg-[#F3FAFF] px-[10px] py-[6px] flex items-center">
+            <p className="text-[14px] text-[#000000] leading-[150%] tracking-[-0.011em] break-words m-0" style={{ fontFamily: 'Inter, sans-serif' }}>
+                {value || '-'}
+            </p>
+        </div>
+    </div>
+);
 
 export default InformasiPelanggan;

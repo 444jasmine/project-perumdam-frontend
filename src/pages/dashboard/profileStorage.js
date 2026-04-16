@@ -1,4 +1,12 @@
+import { getSessionUser } from '../../auth';
+
 const PROFILE_KEY = 'pdamsurvey_surveyor_profiles';
+
+const ACCOUNT_PROFILE_ID_MAP = {
+  admin1: '1',
+  admin2: '2',
+  admin3: '3',
+};
 
 const DEFAULT_PROFILES = [
   {
@@ -54,11 +62,30 @@ export function getSurveyorProfiles() {
   }
 }
 
+export function getCurrentSurveyorProfileId() {
+  const username = String(getSessionUser()?.username || '').trim().toLowerCase();
+  return ACCOUNT_PROFILE_ID_MAP[username] || '';
+}
+
+export function getCurrentSurveyorProfile() {
+  const currentId = getCurrentSurveyorProfileId();
+  if (!currentId) {
+    return null;
+  }
+
+  return getSurveyorProfileById(currentId);
+}
+
 export function getSurveyorProfileById(profileId) {
   return getSurveyorProfiles().find((profile) => String(profile.id) === String(profileId)) || DEFAULT_PROFILES[0];
 }
 
 export function saveSurveyorProfile(profileId, profile) {
+  const currentProfileId = getCurrentSurveyorProfileId();
+  if (!currentProfileId || String(profileId) !== String(currentProfileId)) {
+    return getCurrentSurveyorProfile();
+  }
+
   const currentProfiles = getSurveyorProfiles();
   const nextProfiles = currentProfiles.map((item) => {
     if (String(item.id) !== String(profileId)) {
